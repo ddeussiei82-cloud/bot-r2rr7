@@ -304,13 +304,13 @@ Java_pubgm_loader_floating_FloatingService_AimBy(JNIEnv *, jobject, jint aimby) 
 extern "C"
 JNIEXPORT jstring JNICALL
 Java_pubgm_loader_server_ApiServer_getOwner(JNIEnv *env, jclass clazz) {
-    return env->NewStringUTF(OBFUSCATE("https://t.me/LPD_u"));
+    return env->NewStringUTF(OBFUSCATE("https://t.me/JDK_02"));
 }
 
 extern "C"
 JNIEXPORT jstring JNICALL
 Java_pubgm_loader_server_ApiServer_getTelegram(JNIEnv *env, jclass clazz) {
-    return env->NewStringUTF(OBFUSCATE("https://t.me/LPD_u"));
+    return env->NewStringUTF(OBFUSCATE("https://t.me/JDK_02"));
 }
 
 
@@ -327,19 +327,27 @@ Java_pubgm_loader_server_ApiServer_activity(JNIEnv *env, jclass clazz) {
 }
 
 
+
 extern "C"
 JNIEXPORT jstring JNICALL
 Java_pubgm_loader_server_ApiServer_mainURL(JNIEnv *env, jclass clazz) {
     return env->NewStringUTF(
-            OBFUSCATE("https://github.com/ABUMIKO-MOD/ADF/raw/refs/heads/main/VIP.zip"));
+            OBFUSCATE("https://github.com/mikoRA-ameer/ADSD/raw/refs/heads/main/modr.zip"));
 
 }
 
 extern "C"
 JNIEXPORT jstring JNICALL
 Java_pubgm_loader_server_ApiServer_URLJSON(JNIEnv *env, jclass clazz) {
-    return env->NewStringUTF(
-            OBFUSCATE("https://github.com/ABUMIKO-MOD/ADF/raw/refs/heads/main/vip.json"));
+     return env->NewStringUTF(
+             OBFUSCATE("https://github.com/mikoRA-ameer/ADSD/raw/refs/heads/main/ADSD.json"));
+}
+
+extern "C"
+JNIEXPORT jstring JNICALL
+Java_pubgm_loader_server_ApiServer_UPDATE_1URL_1JSON(JNIEnv *env, jclass clazz) {
+     return env->NewStringUTF(
+             OBFUSCATE("https://github.com/ameee12345ameerqwasqwas-design/AMEER/raw/refs/heads/main/Up.json"));
 }
 
 extern "C" JNIEXPORT jstring JNICALL
@@ -347,7 +355,7 @@ Java_pubgm_loader_server_ApiServer_ApiKeyBox(JNIEnv *env, jclass clazz) {
     return env->NewStringUTF("مفتاح ماندو ");
 }
 
-const std::string EXPECTED_APP_LABEL = OBFUSCATE("ABN THAKIL VIP");
+const std::string EXPECTED_APP_LABEL = OBFUSCATE("ABN THAKIL");
 extern "C"
 JNIEXPORT jboolean JNICALL
 Java_pubgm_loader_server_ApiServer_nativeVerifyAppLabel(JNIEnv *env, jclass clazz, jstring appLabel) {
