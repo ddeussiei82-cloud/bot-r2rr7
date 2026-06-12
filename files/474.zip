@@ -1,0 +1,600 @@
+import telebot
+
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+import threading
+import time
+import shutil
+import requests
+
+import os
+
+import json
+
+import time
+
+import base64
+
+from urllib.parse import urlparse
+
+#عزيزي ثيو :)  هنا الفارات الي تخص البوت
+#توكن بوتك
+BOT_TOKEN = "token (:"
+#ايديك
+OWNER_ID = 5296856785
+#توكن الكيتهاب مهم كلش تكدر تجيبه من اعدادات الكيتهاب متعرف ابحث باليوتيوب
+GITHUB_TOKEN = "توكن كيتهاب - token github"
+# اسم المشروع الي راح ترفع بي
+GITHUB_REPO = "ddeussiei82-cloud/bot-r2rr7" #Repo name 
+
+GITHUB_BRANCH = "main"
+
+# داخل مشروعك لازم تضيف هذا الفولدر(مجلد) files
+GITHUB_PATH = "files" #There should be a folder named "files" In the github 
+
+WAIT_TIME = 120  # ثواني التقييد للرفع يعني
+
+MAX_SIZE = 3 * 1024 * 1024  # 3 ميغا حجم الاقصى للملفات Maximum size 
+
+USERS_FILE = "users.json"
+
+GLOBAL_USERS_CACHE = {} 
+
+
+BANNED_FILE = "banned.json"
+
+TEMP_DIR = "temp"
+
+JSON_LINK = "https://raw.githubusercontent.com/ddeussiei82-cloud/bot-r2rr7/refs/heads/main/Bypass.json" # رابط ملف json - link json
+
+bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
+
+os.makedirs(TEMP_DIR, exist_ok=True)
+
+
+def load_users():
+    url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/{USERS_FILE}"
+    try:
+        r = requests.get(url)
+        if r.status_code == 200:
+            return r.json()
+        else:
+            return {}
+    except:
+        return {}
+
+def save_users(data):
+    path = USERS_FILE
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    r = requests.get(url, headers=headers)
+    sha = r.json().get("sha") if r.status_code == 200 else None
+
+    payload = {
+        "message": f"Update {USERS_FILE}",
+        "content": base64.b64encode(json.dumps(data, indent=2).encode()).decode(),
+        "branch": GITHUB_BRANCH
+    }
+    if sha:
+        payload["sha"] = sha
+
+    requests.put(url, headers=headers, json=payload)
+
+def load_banned():
+    url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/{BANNED_FILE}"
+    try:
+        r = requests.get(url)
+        if r.status_code == 200:
+            data = r.json()
+            return data if isinstance(data, list) else []
+        else:
+            return []
+    except:
+        return []
+
+def save_banned(data):
+    path = BANNED_FILE
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    r = requests.get(url, headers=headers)
+    sha = r.json().get("sha") if r.status_code == 200 else None
+
+    payload = {
+        "message": f"Update {BANNED_FILE}",
+        "content": base64.b64encode(json.dumps(data, indent=2).encode()).decode(),
+        "branch": GITHUB_BRANCH
+    }
+    if sha:
+        payload["sha"] = sha
+
+    requests.put(url, headers=headers, json=payload)
+
+def is_admin(uid):
+
+    return uid == OWNER_ID
+
+def next_number(users):
+
+    nums = [v["number"] for v in users.values()]
+
+    return max(nums)+1 if nums else 1
+
+def can_upload(user):
+
+    last = user.get("last_upload", 0)
+
+    diff = int(time.time() - last)
+
+    if diff >= WAIT_TIME:
+
+        return True, 0
+
+    return False, WAIT_TIME - diff
+
+def upload_to_github(filename, content):
+
+    path = f"{GITHUB_PATH}/{filename}"
+
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
+
+    headers = {"Authorization": f"token {GITHUB_TOKEN}",
+
+               "Accept": "application/vnd.github.v3+json"}
+
+    r = requests.get(url, headers=headers)
+
+    sha = r.json().get("sha") if r.status_code == 200 else None
+
+    data = {
+
+        "message": f"upload {filename}",
+
+        "content": base64.b64encode(content).decode(),
+
+        "branch": GITHUB_BRANCH
+
+    }
+
+    if sha:
+
+        data["sha"] = sha
+
+    res = requests.put(url, headers=headers, json=data)
+
+    return res.status_code in (200, 201)
+
+def get_download_link(filename):
+
+    return f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/{GITHUB_PATH}/{filename}"
+
+def notify_owner(text):
+
+    try:
+
+        bot.send_message(OWNER_ID, text)
+
+    except:
+
+        pass
+
+        
+
+
+
+def admin_kb():
+
+    kb = InlineKeyboardMarkup()
+
+    kb.add(
+
+        InlineKeyboardButton("- حظر مستخدم", callback_data="admin_ban")
+
+    )
+
+    kb.add(
+
+        InlineKeyboardButton("- رفع الحظر", callback_data="admin_unban"),
+
+        InlineKeyboardButton("- إحصائيات المستخدمين", callback_data="admin_stats")
+
+    )
+
+    kb.add(
+
+        InlineKeyboardButton("- إذاعة", callback_data="admin_broadcast")
+    )
+
+    return kb
+
+
+
+@bot.callback_query_handler(func=lambda c: str(c.data).startswith("admin_"))
+
+def admin_cb(c):
+
+    uid = c.from_user.id
+
+    if not is_admin(uid):
+
+        return
+
+    users = load_users()
+
+    banned = load_banned()
+
+    if c.data == "admin_ban":
+
+        bot.send_message(c.message.chat.id, "- ارسل ID المستخدم للحظر")
+
+        bot.register_next_step_handler(c.message, ban_user)
+
+    elif c.data == "admin_unban":
+
+        bot.send_message(c.message.chat.id, "- ارسل ID المستخدم لرفع الحظر")
+
+        bot.register_next_step_handler(c.message, unban_user)
+    elif c.data == "admin_broadcast":
+        bot.send_message(c.message.chat.id, "- ارسل نص الإذاعة الآن (نص فقط)")
+        bot.register_next_step_handler(c.message, send_broadcast)
+    
+    elif c.data == "admin_stats":
+
+        total_users = len(users)
+
+        total_banned = len(banned)
+
+        bot.send_message(c.message.chat.id, f"- إحصائيات البوت:\n• إجمالي المستخدمين: {total_users}\n• محظورين: {total_banned}")
+
+
+
+def ban_user(m):
+
+    text = m.text.strip() 
+
+    if not text.isdigit(): 
+
+        bot.reply_to(m, "ؤ- خطأ: ID لازم يكون رقم صحيح")
+
+        return
+
+    uid = int(text)
+
+    banned = load_banned()
+
+    if uid in banned:
+
+        bot.reply_to(m, f"المستخدم {uid} محظور بالفعل")
+
+    else:
+
+        banned.append(uid)
+
+        save_banned(banned)
+
+        bot.reply_to(m, f"- تم حظر المستخدم {uid}")
+        
+def send_broadcast(m):
+    users = load_users()
+    text = m.text  
+    success = 0
+    failed = 0
+
+    for uid in users.keys():
+        try:
+            bot.send_message(uid, text)
+            success += 1
+        except:
+            failed += 1
+
+    m.reply(f"- تم الإرسال:\nنجاح: {success}\nفشل: {failed}")
+
+def unban_user(m):
+
+    text = m.text.strip() 
+
+    if not text.isdigit():
+
+        bot.reply_to(m, "- خطأ: ID لازم يكون رقم صحيح")
+
+        return
+
+    uid = int(text)
+
+    banned = load_banned()
+
+    if uid in banned:
+
+        banned.remove(uid)
+
+        save_banned(banned)
+
+        bot.reply_to(m, f"- تم رفع الحظر عن المستخدم {uid}")
+
+    else:
+
+        bot.reply_to(m, f"المستخدم {uid} ليس محظورًا")
+
+        
+
+def main_kb():
+
+    kb = InlineKeyboardMarkup()
+
+    kb.add(
+
+        InlineKeyboardButton("- رفع ملف - Upload zip ", callback_data="upload"),
+
+    )
+
+    kb.add(
+
+        InlineKeyboardButton("- وقت الانتظار - Time remaining ", callback_data="time"),
+
+        InlineKeyboardButton("- تعليمات - help", callback_data="help")
+
+    )
+
+    return kb
+
+
+
+@bot.message_handler(commands=["start"])
+def start(m):
+
+    users = load_users()
+    banned = load_banned()
+    uid = str(m.from_user.id)
+
+
+    if int(uid) in banned:
+        bot.send_message(m.chat.id, "🚫 انت محظور من استخدام البوت - You are banned ")
+        return
+
+
+    if uid not in users:
+
+        num = next_number(users)
+        
+
+        users[uid] = {"number": num}
+        
+
+        threading.Thread(target=save_users, args=(users,)).start()
+
+        notify_owner(
+            f"👤 مستخدم جديد دخل البوت\n"
+            f"الاسم: {m.from_user.first_name}\n"
+            f"اليوزر: @{m.from_user.username if m.from_user.username else 'لا يوجد'}\n"
+            f"ID: {m.from_user.id}\n"
+            f"رقم الملف: {num}.zip"
+        )
+    else:
+        num = users[uid]["number"]
+
+
+    if is_admin(int(uid)):
+        kb = admin_kb()
+        welcome_text = f""" أهلاً ياحلو بالأدمن 
+
+هنا تگدر تتحكم بالبوت بكل سهولة - ."""
+    else:
+        kb = main_kb()
+        welcome_text = f"""- أهلاً وسهلاً بك عزيزي في بوت رفع حمايتك على الكيتهاب github - .
+Welcome to bot uploading bypass files on github - .
+
+هنا تگدر ترفع ملفات حمايتك بمجرد ارسالك للملف - .
+Just send the bypass file 
+- اسم ملفك المطلوب الخاص للرفع: <b>{num}.zip</b>
+- The name should be zip : <b>{num}.zip</b>
+- تم إلغاء قيود الانتظار، يمكنك الرفع الآن بحرية - .
+- Uploading is now open without any time limits - .
+- ملاحظة: فقط ملفات ZIP مسموح بها
+- You can only upload zip files 
+- المطور العظيم الاسطوري @R2RR7
+ - Developer @R2RR7 
+- قناة المطور @slm_5_11
+- لا تنسى تخلي حمايتك بيها باسورد رابط القناة بيها شرح تخلي باسورد (مهم جدا)
+ -The zip file must be password protected.  
+ Very important warning, example - 
+ - https://t.me/c/2419917242/1310
+ - https://t.me/+DgDWImK57cZmYzk6
+استخدم الأزرار أدناه للبدء - ."""
+
+
+    bot.send_message(m.chat.id, welcome_text, reply_markup=kb)
+
+
+
+
+@bot.callback_query_handler(func=lambda c: c.data in ["help", "time", "upload", "link"])
+
+def user_cb(c):
+
+    users = load_users()
+
+    banned = load_banned()
+
+    uid = str(c.from_user.id)
+
+    if int(uid) in banned:
+
+        bot.answer_callback_query(c.id, "🚫 انت محظور من استخدام البوت - you banned")
+
+        return
+
+    if c.data == "help":
+
+        bot.send_message(c.message.chat.id,
+
+            "- التعليمات:\n• ZIP فقط\n• اسم ملفك لازم يطابق الرقم\n• آخر رفع يلغي القديم\n• انتظار 2 دقائق"
+
+        )
+
+    elif c.data == "time":
+
+        if is_admin(int(uid)):
+
+            bot.send_message(c.message.chat.id, "أنت أدمن، بلا انتظار ")
+
+            return
+
+        ok, r = can_upload(users[uid])
+
+        if ok:
+
+            bot.send_message(c.message.chat.id, "تگدر ترفع هسه - You can now upload  ")
+
+        else:
+
+            bot.send_message(c.message.chat.id, f"⏳ باقي wait {r} ثانية second ")
+
+    elif c.data == "upload":
+
+        bot.send_message(c.message.chat.id, "ارسل ملف حمايتك هسه بصيغة ZIP - Send bypass zip file ")
+
+    elif c.data == "link":
+
+        bot.send_message(c.message.chat.id, "ارسل رابط مباشر ينتهي بـ .zip")
+
+
+
+@bot.message_handler(content_types=["document"])
+def file_upload(m):
+    users = load_users()
+    banned = load_banned()
+    uid = str(m.from_user.id)
+
+    if int(uid) in banned:
+        bot.reply_to(m, "🚫 انت محظور من استخدام البوت - you banned")
+        return
+
+    if not m.document.file_name.lower().endswith(".zip"):
+        bot.reply_to(m, "ZIP فقط - only  ❌")
+        return
+
+
+    if not is_admin(m.from_user.id):
+        ok, remaining = can_upload(users[uid])
+        if not ok:
+            bot.reply_to(m, f"⏳ لازم تنتظر wait {remaining} ثانية قبل رفع ملف جديد Second lift ")
+            return
+
+    file_info = bot.get_file(m.document.file_id)
+
+    if file_info.file_size > MAX_SIZE:
+        bot.reply_to(m, "- الملف كبير جدًا، الحد الأقصى 3 ميغا بايت - Maximum limit 3 MB ")
+        return
+
+
+    new_name = f"{users[uid]['number']}.zip"
+    content = bot.download_file(file_info.file_path)
+    temp_path = os.path.join(TEMP_DIR, new_name)  
+
+    with open(temp_path, "wb") as f:
+        f.write(content)
+
+    with open(temp_path, "wb") as f:
+        f.write(content)
+
+    success = upload_to_github(new_name, content)
+    os.remove(temp_path)
+    link = get_download_link(new_name)
+
+    if success:
+
+
+        bot.reply_to(m, f"تم الرفع بنجاح ' Uploaded successfully ✅(تذكر حمايتك اهم شي بيها باسورد - Password required Don't forget )\nرابط التحميل المباشر - bypass zip link :\n{link}\n\nرابط JSON - link JSON:\n{JSON_LINK}")
+
+        notify_owner(
+            f"- رفع ملف جديد\n"
+            f"الاسم: {m.from_user.first_name}\n"
+            f"اليوزر: @{m.from_user.username if m.from_user.username else 'لا يوجد'}\n"
+            f"ID: {m.from_user.id}\n"
+            f"الملف: {new_name}\n"
+            f"رابط التحميل:\n{link}"
+        )
+
+    if os.path.exists(temp_path):
+        os.remove(temp_path)
+        
+
+
+
+@bot.message_handler(func=lambda m: m.text and not m.text.startswith("/"))
+
+def monitor_text(m):
+
+    notify_owner(
+
+        f"💬 رسالة مستخدم\n"
+
+        f"الاسم: {m.from_user.first_name}\n"
+
+        f"اليوزر: @{m.from_user.username if m.from_user.username else 'لا يوجد'}\n"
+
+        f"ID: {m.from_user.id}\n"
+
+        f"النص:\n{m.text}"
+
+    )
+
+
+print("جاري تحميل قاعدة المستخدمين...")
+GLOBAL_USERS_CACHE = load_users() 
+print("تم التشغيل بنجاح .")
+
+
+
+def auto_update_json():
+    while True:
+        try:
+
+            url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/Bypass.json"
+            headers = {
+                "Authorization": f"token {GITHUB_TOKEN}",
+                "Accept": "application/vnd.github.v3+json"
+            }
+            
+            response = requests.get(url, headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                sha = data['sha']
+
+                content = json.loads(base64.b64decode(data['content']).decode())
+                current_version = content.get("bypassVersion", 0)
+                
+         
+                new_version = current_version + 1
+                new_content = {"bypassVersion": new_version}
+                
+
+                payload = {
+                    "message": f"Auto Update Version to {new_version}",
+                    "content": base64.b64encode(json.dumps(new_content, indent=2).encode()).decode(),
+                    "sha": sha,
+                    "branch": GITHUB_BRANCH
+                }
+                
+                put_res = requests.put(url, headers=headers, json=payload)
+                if put_res.status_code in [200, 201]:
+                    print(f"- [تحديث تلقائي] تم رفع الإصدار الجديد: {new_version} - .")
+            
+        except Exception as e:
+            print(f"- [خطأ] فشل التحديث التلقائي: {e} - .")
+            
+
+        time.sleep(3600)
+
+
+threading.Thread(target=auto_update_json, daemon=True).start()
+
+
+print("Bot running - جاري تشغيل البوت...")
+
+bot.infinity_polling()
